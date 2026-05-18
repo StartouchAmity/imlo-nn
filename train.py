@@ -75,5 +75,16 @@ class NeuralNetwork(nn.Module):
             nn.BatchNorm1d(128),
             nn.LeakyReLU(negative_slope=0.05, inplace=True),
             nn.Dropout(0.4),
-            nn.Linear(128, 37)
+            nn.Linear(128, num_classes)
         )
+
+    def forward(self, x):
+        output = self.neuralBlocks(x)
+
+        output = self.globalPool(output)
+
+        output = torch.flatten(output, 1)
+
+        output = self.classifier(output)
+
+        return output
