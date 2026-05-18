@@ -88,3 +88,30 @@ class NeuralNetwork(nn.Module):
         output = self.classifier(output)
 
         return output
+    
+if __name__ == "__main__":
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'gpu')
+
+    initial_lr = 0.001
+    batch_size = 32
+    epochs = 30
+
+    transform_training = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.RandomHorizontalFlip(p=0.5), 
+        transforms.RandomRotation(15),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    training_dataset = datasets.OxfordIIITPet(root="data", split="trainval", transform=transform_training, download=True)
+
+    training_dataloader = DataLoader(training_dataset, batch_size=batch_size, shuffle=True)
+
+    model = NeuralNetwork()
+    model = model.to(device=device)
+
+    loss_function = nn.CrossEntropyLoss()
+    optimiser = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=0.0001)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimiser, mode="min", factor=0.5, patience=3)
