@@ -1,7 +1,7 @@
-import os
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from torch.utils.data import Subset
 from torchvision import datasets, transforms
 
 class NeuralBlock(nn.Module):
@@ -91,11 +91,13 @@ class NeuralNetwork(nn.Module):
     
 if __name__ == "__main__":
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'gpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     initial_lr = 0.001
     batch_size = 32
     epochs = 30
+
+    best_accuracy = 0.0
 
     transform_training = transforms.Compose([
         transforms.Resize((256, 256)),
@@ -105,9 +107,27 @@ if __name__ == "__main__":
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    training_dataset = datasets.OxfordIIITPet(root="data", split="trainval", transform=transform_training, download=True)
+    transform_validation = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    full_training_dataset = datasets.OxfordIIITPet(root="data", split="trainval", transform=transform_training, download=True)
+    full_validation_dataset = datasets.OxfordIIITPet(root="data", split="trainval", transform=transform_validation, download=True)
+
+    training_size = int(0.8 * len(full_training_dataset))
+
+    indices = torch.randperm(len(full_training_dataset)).tolist()
+
+    training_indices = indices[:training_size]
+    validation_indices = indices[training_size:]
+
+    training_dataset = Subset(full_training_dataset, training_indices)
+    validation_dataset = Subset(full_validation_dataset, validation_indices)
 
     training_dataloader = DataLoader(training_dataset, batch_size=batch_size, shuffle=True)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
 
     model = NeuralNetwork()
     model = model.to(device=device)
@@ -115,3 +135,92 @@ if __name__ == "__main__":
     loss_function = nn.CrossEntropyLoss()
     optimiser = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=0.0001)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimiser, mode="min", factor=0.5, patience=3)
+
+    def training_loop(model, training_loader, loss_function, optimiser, device):
+        
+        running_loss = 0.0
+        correct = 0
+        total = 0
+
+        model.train()
+
+        for images, labels in training_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            optimiser.zero_grad()
+
+            outputs = model(images)
+            loss = loss_function(outputs, labels)
+
+            loss.backward()
+            optimiser.step()
+
+            running_loss += loss.item()
+
+            predictions = outputs.argmax(dim=1)
+
+            total += labels.size(0)
+
+            correct += predictions.eq(labels).sum().item()
+
+        epoch_loss = running_loss / len(training_loader)
+        epoch_accuracy = correct / total
+        
+        return epoch_loss, epoch_accuracy
+    
+    def validation(model, validation_loader, loss_function, device):
+
+        model.eval()
+
+        running_loss = 0.0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+
+            for images, labels in validation_loader:
+
+                images = images.to(device)
+                labels = labels.to(device)
+
+                outputs = model(images)
+                loss = loss_function(outputs, labels)
+
+                running_loss += loss.item()
+
+                predictions = outputs.argmax(dim=1)
+
+                total += labels.size(0)
+
+                correct += predictions.eq(labels).sum().item()
+
+        epoch_loss = running_loss / len(validation_loader)
+        epoch_accuracy = correct / total
+        
+        return epoch_loss, epoch_accuracy
+
+    
+    for epoch in range(epochs):
+        print(f"\nEpoch: {epoch + 1}/{epochs}")
+
+        training_loss, training_acc = training_loop(model=model, training_loader=training_dataloader,
+                                                    optimiser=optimiser, loss_function=loss_function, device=device)
+        validation_loss, validation_acc = validation(model=model, validation_loader=validation_dataloader,
+                                                     loss_function=loss_function, device=device)
+        
+        if validation_acc > best_accuracy:
+            best_accuracy = validation_acc
+            torch.save(model.state_dict(), 'best_model.pth')
+            print(f"Best model saved to best_model.pth with accuracy {validation_acc:.2f}")
+
+        print(f"Training: Epoch {epoch+1}/{epochs}, Accuracy: {(training_acc * 100):.2f}%, Loss: {training_loss:.3f}")
+        print(f"Validation: Epoch {epoch+1}/{epochs}, Accuracy: {(validation_acc * 100):.2f}%, Loss: {validation_loss:.3f}")
+
+        current_lr = optimiser.param_groups[0]['lr']
+
+        print(f"Learning Rate: {current_lr:.6f}")
+
+        scheduler.step(validation_loss)
+    
+    print(f"Training complete, best validation accuracy: {(best_accuracy * 100):.2f}")
