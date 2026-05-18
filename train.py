@@ -6,15 +6,15 @@ from torchvision import datasets, transforms
 
 class NeuralBlock(nn.Module):
 
-    def __init__(self, inputs, outputs, dropout_rate=0.5):
+    def __init__(self, inputs, outputs, dropout_rate=0.1):
         super().__init__()
 
         self.convolution1 = nn.Conv2d(inputs, outputs, kernel_size=3, stride=1, padding=1, bias=False)
-        self.batchnorm1 = nn.BatchNorm2d(outputs)
+        self.batchNorm1 = nn.BatchNorm2d(outputs)
         self.activation1 = nn.ReLU(inplace=True)
 
         self.convolution2 = nn.Conv2d(outputs, outputs, kernel_size=3, stride=1, padding=1, bias=False)
-        self.batchnorm2 = nn.BatchNorm2d(outputs)
+        self.batchNorm2 = nn.BatchNorm2d(outputs)
         if inputs != outputs:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(inputs, outputs, kernel_size=1, stride=1, padding=0, bias=False),
@@ -31,11 +31,11 @@ class NeuralBlock(nn.Module):
         shortcut = self.shortcut(x)
 
         output = self.convolution1(x)
-        output = self.batchnorm1(output)
+        output = self.batchNorm1(output)
         output = self.activation1(output)
 
         output = self.convolution2(output)
-        output = self.batchnorm2(output)
+        output = self.batchNorm2(output)
 
         output += shortcut
 
@@ -44,3 +44,36 @@ class NeuralBlock(nn.Module):
         output = self.dropout(output)
 
         return output
+
+class NeuralNetwork(nn.Module):
+    def __init__(self, num_classes=37):
+        super().__init__()
+
+        self.neuralBlocks = nn.Sequential(
+            NeuralBlock(3, 32, dropout_rate=0.05),
+            NeuralBlock(32, 32, dropout_rate=0.05),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            NeuralBlock(32, 64, dropout_rate=0.1),
+            NeuralBlock(64, 64, dropout_rate=0.1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            NeuralBlock(64, 128, dropout_rate=0.15),
+            NeuralBlock(128, 128, dropout_rate=0.15),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            NeuralBlock(128, 256, dropout_rate=0.2),
+            NeuralBlock(256, 256, dropout_rate=0.2),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+
+        self.globalPool = nn.AdaptiveAvgPool2d((1,1))
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.LeakyReLU(negative_slope=0.05, inplace=True),
+            nn.Dropout(0.4),
+            nn.Linear(128, 37)
+        )
