@@ -60,23 +60,23 @@ class NeuralNetwork(nn.Module):
         #Convolutional layers for the network added through the neural blocks (8 neural blocks in total, split into groups of 2)
         self.neuralBlocks = nn.Sequential(
             #Group 1: 3 inputs, 32 outputs
-            NeuralBlock(3, 32, dropout_rate=0.05),
-            NeuralBlock(32, 32, dropout_rate=0.05),
+            NeuralBlock(3, 32, dropout_rate=0.0),
+            NeuralBlock(32, 32, dropout_rate=0.0),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
             #Group 2: 32 inputs, 64 outputs
-            NeuralBlock(32, 64, dropout_rate=0.1),
-            NeuralBlock(64, 64, dropout_rate=0.1),
+            NeuralBlock(32, 64, dropout_rate=0.0),
+            NeuralBlock(64, 64, dropout_rate=0.0),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
             #Group 3: 64 inputs, 128 outputs
-            NeuralBlock(64, 128, dropout_rate=0.15),
-            NeuralBlock(128, 128, dropout_rate=0.15),
+            NeuralBlock(64, 128, dropout_rate=0.05),
+            NeuralBlock(128, 128, dropout_rate=0.05),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
             #Group 4: 128 inputs, 256 outputs
-            NeuralBlock(128, 256, dropout_rate=0.2),
-            NeuralBlock(256, 256, dropout_rate=0.2),
+            NeuralBlock(128, 256, dropout_rate=0.1),
+            NeuralBlock(256, 256, dropout_rate=0.1),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
 
@@ -85,11 +85,11 @@ class NeuralNetwork(nn.Module):
 
         #Classifer layers to to reduce input of 256 down to one of 37 categories
         self.classifier = nn.Sequential(
-            nn.Dropout(0.3),
+            nn.Dropout(0.15),
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
             nn.LeakyReLU(negative_slope=0.05, inplace=True),
-            nn.Dropout(0.4),
+            nn.Dropout(0.2),
             nn.Linear(128, num_classes)
         )
 
@@ -112,22 +112,23 @@ if __name__ == "__main__":
 
     #Hyperparameters
     initial_lr = 0.001
-    batch_size = 32
+    batch_size = 64
     epochs = 30
 
     best_accuracy = 0.0
 
     #Data transforms for both training and validation
     transform_training = transforms.Compose([
-        transforms.Resize((256, 256)),
+        transforms.Resize((160, 160)),
+        transforms.RandomCrop((144, 144)),
         transforms.RandomHorizontalFlip(p=0.5), 
-        transforms.RandomRotation(15),
+        transforms.RandomRotation(10),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     transform_validation = transforms.Compose([
-        transforms.Resize((256, 256)),
+        transforms.Resize((144, 144)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -140,7 +141,7 @@ if __name__ == "__main__":
     training_size = int(0.8 * len(full_training_dataset))
 
     #Shuffles indices to prevent any possible accidental bias when splitting datasets, torch.manual allows for reproducibility
-    #torch.manual_seed(42)
+    torch.manual_seed(42)
     indices = torch.randperm(len(full_training_dataset)).tolist()
     #Splits the shuffled indices based on the training and validation dataset sizes
     training_indices = indices[:training_size]
@@ -158,9 +159,9 @@ if __name__ == "__main__":
     model = model.to(device=device)
 
     #Defines loss function, optimiser, and scheduler to be used during training
-    loss_function = nn.CrossEntropyLoss()
+    loss_function = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimiser = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=0.0001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimiser, mode="min", factor=0.5, patience=3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimiser, T_max=30)
 
 
     #Training function to be used during the training loop
@@ -248,7 +249,7 @@ if __name__ == "__main__":
         if validation_acc > best_accuracy:
             best_accuracy = validation_acc
             torch.save(model.state_dict(), 'best_model.pth')
-            print(f"Best model saved to best_model.pth with accuracy {validation_acc:.2f}")
+            print(f"Best model saved to best_model.pth with accuracy {(validation_acc* 100):.2f}%")
 
         #Keeps track of accuracy and loss of the model (useful for debugging purposes)
         print(f"Training: Epoch {epoch+1}/{epochs}, Accuracy: {(training_acc * 100):.2f}%, Loss: {training_loss:.3f}")
@@ -258,7 +259,7 @@ if __name__ == "__main__":
 
         print(f"Learning Rate: {current_lr:.6f}")
 
-        scheduler.step(validation_loss)
+        scheduler.step()
     
     #Training complete, outputs best accuracy achieved
-    print(f"Training complete, best validation accuracy: {(best_accuracy * 100):.2f}")
+    print(f"Training complete, best validation accuracy: {(best_accuracy * 100):.2f}%")
