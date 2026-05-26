@@ -85,11 +85,11 @@ class NeuralNetwork(nn.Module):
 
         #Classifer layers to to reduce input of 256 down to one of 37 categories
         self.classifier = nn.Sequential(
-            nn.Dropout(0.15),
+            nn.Dropout(0.1),
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
             nn.LeakyReLU(negative_slope=0.05, inplace=True),
-            nn.Dropout(0.2),
+            nn.Dropout(0.15),
             nn.Linear(128, num_classes)
         )
 
@@ -119,8 +119,8 @@ if __name__ == "__main__":
 
     #Data transforms for both training and validation
     transform_training = transforms.Compose([
-        transforms.Resize((160, 160)),
-        transforms.RandomCrop((144, 144)),
+        transforms.Resize((188, 188)),
+        transforms.RandomCrop((160, 160)),
         transforms.RandomHorizontalFlip(p=0.5), 
         transforms.RandomRotation(10),
         transforms.ToTensor(),
@@ -128,9 +128,10 @@ if __name__ == "__main__":
     ])
 
     transform_validation = transforms.Compose([
-        transforms.Resize((144, 144)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Resize((188, 188)),
+                transforms.CenterCrop((160, 160)),
+                        transforms.ToTensor(),
+                                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     #Loading of datasets for training and validation using the corresponding transforms
