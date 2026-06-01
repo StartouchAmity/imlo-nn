@@ -152,6 +152,9 @@ if __name__ == "__main__":
     training_dataset = Subset(full_training_dataset, training_indices)
     validation_dataset = Subset(full_validation_dataset, validation_indices)
 
+    print(f"Length of training dataset: {len(training_dataset)}")
+    print(f"Length of validation dataset: {len(validation_dataset)}")
+
     training_dataloader = DataLoader(training_dataset, batch_size=batch_size, shuffle=True)
     validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
 
